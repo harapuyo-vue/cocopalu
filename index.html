@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="cocopalu" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <title>cocopalu</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #f8fafc;
+      font-family: Arial, -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+      overscroll-behavior-y: none;
+    }
+    body {
+      padding-bottom: max(env(safe-area-inset-bottom), 24px);
+    }
+    .no-select {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .canvas-container {
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .animate-spin-fast {
+      animation: spin 0.7s linear infinite;
+    }
+  </style>
+</head>
+<body class="flex flex-col h-full text-slate-800">
+
+  <!-- 上部ヘッダー -->
+  <header class="bg-white border-b border-slate-200 px-3 pt-2 pb-2 flex items-center justify-between shrink-0 no-select">
+    <div class="flex items-center gap-1">
+      <button id="prevMonthBtn" class="p-2 rounded-lg active:bg-slate-100 text-slate-600" aria-label="前月">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <h1 id="monthTitle" class="text-lg font-bold tracking-tight min-w-[115px] text-center">2026年 11月</h1>
+      <button id="nextMonthBtn" class="p-2 rounded-lg active:bg-slate-100 text-slate-600" aria-label="翌月">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </button>
+      <button id="todayBtn" class="ml-1 px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-700 rounded-md active:bg-slate-200">
+        今月
+      </button>
+    </div>
+
+    <div class="flex items-center gap-1.5">
+      <button id="shareBtn" class="p-2 rounded-lg bg-slate-100 text-slate-700 active:bg-slate-200" title="URLをコピー">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+      </button>
+      <button id="refreshBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold active:bg-blue-700 shadow-sm">
+        <svg id="refreshIcon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        <span>更新</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 曜日ヘッダー -->
+  <div class="grid grid-cols-7 bg-white border-b border-slate-200 text-center text-xs font-bold py-1.5 shrink-0 no-select">
+    <div class="text-red-500">日</div>
+    <div class="text-slate-600">月</div>
+    <div class="text-slate-600">火</div>
+    <div class="text-slate-600">水</div>
+    <div class="text-slate-600">木</div>
+    <div class="text-slate-600">金</div>
+    <div class="text-blue-600">土</div>
+  </div>
+
+  <!-- カレンダーグリッド -->
+  <main id="calendarGrid" class="flex-1 grid grid-cols-7 auto-rows-fr bg-slate-200 gap-[1px] overflow-hidden no-select mb-3 px-1">
+    <!-- JSで動的生成 -->
+  </main>
+
+  <!-- トースト通知 -->
+  <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800/90 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50 whitespace-nowrap">
+    更新しました
+  </div>
+
+  <!-- 手書き編集モーダル -->
+  <div id="editorModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-[1px] z-40 hidden flex-col justify-between p-3 sm:p-6">
+    <div class="bg-white rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-md shrink-0 no-select">
+      <div class="flex items-center gap-2">
+        <span id="modalDateLabel" class="text-base font-bold text-slate-800">11月18日 (水)</span>
+        <span id="modalHolidayBadge" class="hidden text-[11px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">祝日</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="undoBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold active:bg-slate-200 disabled:opacity-40">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+          <span>1つ戻る</span>
+        </button>
+        <button id="clearBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-semibold active:bg-red-100">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          <span>全消去</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="clearConfirmBar" class="hidden bg-red-600 text-white rounded-xl px-4 py-2.5 mt-2 flex items-center justify-between shadow-md shrink-0 no-select">
+      <span class="text-xs font-bold">この日の手書きをすべて消去しますか？</span>
+      <div class="flex items-center gap-2">
+        <button id="clearCancelBtn" class="px-3 py-1 rounded bg-red-700 text-xs font-semibold">やめる</button>
+        <button id="clearConfirmBtn" class="px-3 py-1 rounded bg-white text-red-600 text-xs font-bold">消去する</button>
+      </div>
+    </div>
+
+    <div class="flex-1 flex items-center justify-center my-2 min-h-0">
+      <div id="canvasWrapper" class="relative bg-white rounded-2xl shadow-xl border-2 border-slate-300 overflow-hidden canvas-container w-full max-w-[380px] max-h-full aspect-[3/4]">
+        <div class="absolute inset-0 pointer-events-none opacity-25" style="background-image: linear-gradient(to right, #cbd5e1 1px, transparent 1px), linear-gradient(to bottom, #cbd5e1 1px, transparent 1px); background-size: 25% 25%;"></div>
+        <canvas id="drawCanvas" class="w-full h-full block"></canvas>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl px-4 py-3 flex items-center justify-between shadow-md shrink-0 no-select">
+      <div class="flex items-center gap-3" id="colorPalette">
+        <button data-color="#1e293b" class="color-btn w-8 h-8 rounded-full bg-[#1e293b] ring-offset-2 transition-transform" aria-label="黒"></button>
+        <button data-color="#ef4444" class="color-btn w-8 h-8 rounded-full bg-[#ef4444] ring-offset-2 transition-transform" aria-label="赤"></button>
+        <button data-color="#2563eb" class="color-btn w-8 h-8 rounded-full bg-[#2563eb] ring-offset-2 transition-transform" aria-label="青"></button>
+        <button data-color="#16a34a" class="color-btn w-8 h-8 rounded-full bg-[#16a34a] ring-offset-2 transition-transform" aria-label="緑"></button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="cancelEditBtn" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold active:bg-slate-200">
+          キャンセル
+        </button>
+        <button id="saveEditBtn" class="px-6 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold active:bg-blue-700 shadow-sm disabled:opacity-50">
+          OK
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK & config.jsからの読み込み -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { firebaseConfig } from "./config.js"; // ← GitHub Actionsが自動生成する安全な設定ファイル
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    function ensureCalendarId() {
+      let hash = window.location.hash.replace('#', '').trim();
+      if (!hash || hash.length < 6) {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let rand = 'cal-';
+        for (let i = 0; i < 12; i++) {
+          rand += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        window.location.hash = rand;
+        return rand;
+      }
+      return hash;
+    }
+
+    let calendarId = ensureCalendarId();
+    const COLOR_STORAGE_KEY = 'palu_last_pen_color';
+
+    const HOLIDAYS = {
+      '2025-01-01': '元日', '2025-01-13': '成人の日', '2025-02-11': '建国記念の日', '2025-02-23': '天皇誕生日', '2025-02-24': '振替休日', '2025-03-20': '春分の日', '2025-04-29': '昭和の日', '2025-05-03': '憲法記念日', '2025-05-04': 'みどりの日', '2025-05-05': 'こどもの日', '2025-05-06': '振替休日', '2025-07-21': '海の日', '2025-08-11': '山の日', '2025-09-15': '敬老の日', '2025-09-23': '秋分の日', '2025-10-13': 'スポーツの日', '2025-11-03': '文化の日', '2025-11-23': '勤労感謝の日', '2025-11-24': '振替休日',
+      '2026-01-01': '元日', '2026-01-12': '成人の日', '2026-02-11': '建国記念の日', '2026-02-23': '天皇誕生日', '2026-03-20': '春分の日', '2026-04-29': '昭和の日', '2026-05-03': '憲法記念日', '2026-05-04': 'みどりの日', '2026-05-05': 'こどもの日', '2026-05-06': '振替休日', '2026-07-20': '海の日', '2026-08-11': '山の日', '2026-09-21': '敬老の日', '2026-09-22': '国民の休日', '2026-09-23': '秋分の日', '2026-10-12': 'スポーツの日', '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日',
+      '2027-01-01': '元日', '2027-01-11': '成人の日', '2027-02-11': '建国記念の日', '2027-02-23': '天皇誕生日', '2027-03-21': '春分の日', '2027-03-22': '振替休日', '2027-04-29': '昭和の日', '2027-05-03': '憲法記念日', '2027-05-04': 'みどりの日', '2027-05-05': 'こどもの日', '2027-07-19': '海の日', '2027-08-11': '山の日', '2027-09-20': '敬老の日', '2027-09-23': '秋分の日', '2027-10-11': 'スポーツの日', '2027-11-03': '文化の日', '2027-11-23': '勤労感謝の日',
+      '2028-01-01': '元日', '2028-01-10': '成人の日', '2028-02-11': '建国記念の日', '2028-02-23': '天皇誕生日', '2028-03-20': '春分の日', '2028-04-29': '昭和の日', '2028-05-03': '憲法記念日', '2028-05-04': 'みどりの日', '2028-05-05': 'こどもの日', '2028-07-17': '海の日', '2028-08-11': '山の日', '2028-09-18': '敬老の日', '2028-09-22': '秋分の日', '2028-10-09': 'スポーツの日', '2028-11-03': '文化の日', '2028-11-23': '勤労感謝の日'
+    };
+
+    const today = new Date();
+    let currentYear = today.getFullYear();
+    let currentMonth = today.getMonth();
+    let calendarData = {};
+
+    let selectedColor = localStorage.getItem(COLOR_STORAGE_KEY) || '#1e293b';
+    let editingDateStr = null;
+    let editingStrokes = [];
+    let currentStroke = null;
+    let isDrawing = false;
+
+    const monthTitle = document.getElementById('monthTitle');
+    const calendarGrid = document.getElementById('calendarGrid');
+    const editorModal = document.getElementById('editorModal');
+    const modalDateLabel = document.getElementById('modalDateLabel');
+    const modalHolidayBadge = document.getElementById('modalHolidayBadge');
+    const drawCanvas = document.getElementById('drawCanvas');
+    const ctx = drawCanvas.getContext('2d');
+    const undoBtn = document.getElementById('undoBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const clearConfirmBar = document.getElementById('clearConfirmBar');
+    const toast = document.getElementById('toast');
+    const saveEditBtn = document.getElementById('saveEditBtn');
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.remove('opacity-0');
+      setTimeout(() => toast.classList.add('opacity-0'), 2200);
+    }
+
+    function formatDateKey(y, m, d) {
+      return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+
+    function getMonthDocRef(y, m) {
+      const ym = `${y}-${String(m + 1).padStart(2, '0')}`;
+      return doc(db, 'calendars', calendarId, 'months', ym);
+    }
+
+    async function fetchMonthData(y, m, showFeedback = false) {
+      const icon = document.getElementById('refreshIcon');
+      if (showFeedback) icon.classList.add('animate-spin-fast');
+
+      try {
+        const snap = await getDoc(getMonthDocRef(y, m));
+        if (snap.exists()) {
+          const data = snap.data().days || {};
+          calendarData = {};
+          Object.keys(data).forEach(dateKey => {
+            calendarData[dateKey] = data[dateKey];
+          });
+        }
+        renderCalendar();
+        if (showFeedback) showToast('最新の状態に更新しました');
+      } catch (err) {
+        console.error('Firestore read error:', err);
+        if (showFeedback) showToast('読み込みに失敗しました');
+      } finally {
+        if (showFeedback) setTimeout(() => icon.classList.remove('animate-spin-fast'), 400);
+      }
+    }
+
+    async function saveDayToFirestore(dateStr, strokes) {
+      if (!dateStr) return;
+      const [yStr, mStr] = dateStr.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10) - 1;
+      const docRef = getMonthDocRef(y, m);
+
+      const snap = await getDoc(docRef);
+      const existingDays = snap.exists() ? (snap.data().days || {}) : {};
+
+      if (strokes && strokes.length > 0) {
+        existingDays[dateStr] = strokes;
+        calendarData[dateStr] = strokes;
+      } else {
+        delete existingDays[dateStr];
+        delete calendarData[dateStr];
+      }
+
+      await setDoc(docRef, { days: existingDays });
+    }
+
+    function drawStrokesOnContext(targetCtx, strokes, width, height, lineWidthRatio = 0.018) {
+      targetCtx.clearRect(0, 0, width, height);
+      if (!strokes || strokes.length === 0) return;
+
+      targetCtx.lineCap = 'round';
+      targetCtx.lineJoin = 'round';
+      targetCtx.lineWidth = Math.max(1.4, width * lineWidthRatio);
+
+      for (const stroke of strokes) {
+        if (!stroke.points || stroke.points.length === 0) continue;
+        targetCtx.strokeStyle = stroke.color;
+        targetCtx.fillStyle = stroke.color;
+
+        if (stroke.points.length === 1) {
+          const p = stroke.points[0];
+          targetCtx.beginPath();
+          targetCtx.arc(p.x * width, p.y * height, targetCtx.lineWidth / 2, 0, Math.PI * 2);
+          targetCtx.fill();
+        } else {
+          targetCtx.beginPath();
+          targetCtx.moveTo(stroke.points[0].x * width, stroke.points[0].y * height);
+          for (let i = 1; i < stroke.points.length; i++) {
+            targetCtx.lineTo(stroke.points[i].x * width, stroke.points[i].y * height);
+          }
+          targetCtx.stroke();
+        }
+      }
+    }
+
+    function renderCalendar() {
+      monthTitle.textContent = `${currentYear}年 ${currentMonth + 1}月`;
+      calendarGrid.innerHTML = '';
+
+      const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+      const todayKey = formatDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+
+      for (let i = 0; i < totalCells; i++) {
+        const dayNum = i - firstDay + 1;
+        const cell = document.createElement('div');
+
+        if (dayNum < 1 || dayNum > daysInMonth) {
+          cell.className = 'bg-slate-50/70';
+          calendarGrid.appendChild(cell);
+          continue;
+        }
+
+        const dateKey = formatDateKey(currentYear, currentMonth, dayNum);
+        const dayOfWeek = i % 7;
+        const holidayName = HOLIDAYS[dateKey];
+        const isToday = dateKey === todayKey;
+
+        cell.className = 'bg-white relative flex flex-col p-1 cursor-pointer active:bg-blue-50/60 transition-colors overflow-hidden';
+        cell.dataset.date = dateKey;
+
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-center justify-between z-10 pointer-events-none px-0.5';
+
+        const numSpan = document.createElement('span');
+        numSpan.textContent = dayNum;
+        let colorClass = 'text-slate-800';
+        if (dayOfWeek === 0 || holidayName) colorClass = 'text-red-500';
+        else if (dayOfWeek === 6) colorClass = 'text-blue-600';
+
+        if (isToday) {
+          numSpan.className = `text-sm font-normal w-6 h-6 rounded-full flex items-center justify-center bg-blue-600 text-white`;
+        } else {
+          numSpan.className = `text-lg font-normal leading-none ${colorClass}`;
+        }
+        topRow.appendChild(numSpan);
+
+        if (holidayName) {
+          const holSpan = document.createElement('span');
+          holSpan.textContent = holidayName;
+          holSpan.className = 'text-[7px] text-red-400 font-normal truncate max-w-[36px] leading-none';
+          topRow.appendChild(holSpan);
+        }
+
+        cell.appendChild(topRow);
+
+        const previewWrap = document.createElement('div');
+        previewWrap.className = 'flex-1 w-full flex items-center justify-center min-h-0 pt-0.5 pointer-events-none';
+        const miniCanvas = document.createElement('canvas');
+        miniCanvas.className = 'w-full h-full object-contain';
+        miniCanvas.width = 150;
+        miniCanvas.height = 200;
+
+        const strokes = calendarData[dateKey];
+        if (strokes && strokes.length > 0) {
+          drawStrokesOnContext(miniCanvas.getContext('2d'), strokes, 150, 200, 0.018);
+        }
+
+        previewWrap.appendChild(miniCanvas);
+        cell.appendChild(previewWrap);
+
+        cell.addEventListener('click', () => {
+          if (swipedRecently) return;
+          openEditor(dateKey);
+        });
+
+        calendarGrid.appendChild(cell);
+      }
+    }
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let swipedRecently = false;
+
+    function changeMonth(delta) {
+      currentMonth += delta;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+      } else if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
+      renderCalendar();
+      fetchMonthData(currentYear, currentMonth, false);
+    }
+
+    calendarGrid.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      swipedRecently = false;
+    }, { passive: true });
+
+    calendarGrid.addEventListener('touchend', (e) => {
+      if (e.changedTouches.length !== 1) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+        swipedRecently = true;
+        if (dx < 0) changeMonth(1);
+        else changeMonth(-1);
+        setTimeout(() => { swipedRecently = false; }, 300);
+      }
+    }, { passive: true });
+
+    function updateColorButtons() {
+      document.querySelectorAll('.color-btn').forEach(btn => {
+        if (btn.dataset.color === selectedColor) {
+          btn.classList.add('ring-2', 'ring-slate-800', 'scale-110');
+        } else {
+          btn.classList.remove('ring-2', 'ring-slate-800', 'scale-110');
+        }
+      });
+    }
+
+    function updateUndoState() {
+      undoBtn.disabled = editingStrokes.length === 0;
+    }
+
+    function resizeEditorCanvas() {
+      const rect = drawCanvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      drawCanvas.width = rect.width * dpr;
+      drawCanvas.height = rect.height * dpr;
+      redrawEditorCanvas();
+    }
+
+    function redrawEditorCanvas() {
+      drawStrokesOnContext(ctx, editingStrokes, drawCanvas.width, drawCanvas.height, 0.012);
+    }
+
+    function openEditor(dateKey) {
+      editingDateStr = dateKey;
+      const [y, m, d] = dateKey.split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+
+      modalDateLabel.textContent = `${m}月${d}日 (${weekdays[dateObj.getDay()]})`;
+
+      const hol = HOLIDAYS[dateKey];
+      if (hol) {
+        modalHolidayBadge.textContent = hol;
+        modalHolidayBadge.classList.remove('hidden');
+      } else {
+        modalHolidayBadge.classList.add('hidden');
+      }
+
+      const existing = calendarData[dateKey] || [];
+      editingStrokes = JSON.parse(JSON.stringify(existing));
+
+      clearConfirmBar.classList.add('hidden');
+      updateColorButtons();
+      updateUndoState();
+
+      editorModal.classList.remove('hidden');
+      editorModal.classList.add('flex');
+
+      requestAnimationFrame(() => {
+        resizeEditorCanvas();
+      });
+    }
+
+    function closeEditor() {
+      editorModal.classList.add('hidden');
+      editorModal.classList.remove('flex');
+      isDrawing = false;
+    }
+
+    function getNormalizedPos(e) {
+      const rect = drawCanvas.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+        y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
+      };
+    }
+
+    drawCanvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      drawCanvas.setPointerCapture(e.pointerId);
+      isDrawing = true;
+      clearConfirmBar.classList.add('hidden');
+
+      const pos = getNormalizedPos(e);
+      currentStroke = { color: selectedColor, points: [pos] };
+      editingStrokes.push(currentStroke);
+      updateUndoState();
+      redrawEditorCanvas();
+    });
+
+    drawCanvas.addEventListener('pointermove', (e) => {
+      if (!isDrawing || !currentStroke) return;
+      e.preventDefault();
+      const pos = getNormalizedPos(e);
+      const last = currentStroke.points[currentStroke.points.length - 1];
+      const dist = Math.hypot(pos.x - last.x, pos.y - last.y);
+      if (dist > 0.002) {
+        currentStroke.points.push(pos);
+        redrawEditorCanvas();
+      }
+    });
+
+    function endStroke(e) {
+      if (!isDrawing) return;
+      isDrawing = false;
+      currentStroke = null;
+      if (e && e.pointerId !== undefined) {
+        try { drawCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+    }
+
+    drawCanvas.addEventListener('pointerup', endStroke);
+    drawCanvas.addEventListener('pointercancel', endStroke);
+
+    document.querySelectorAll('.color-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedColor = btn.dataset.color;
+        localStorage.setItem(COLOR_STORAGE_KEY, selectedColor);
+        updateColorButtons();
+      });
+    });
+
+    undoBtn.addEventListener('click', () => {
+      if (editingStrokes.length > 0) {
+        editingStrokes.pop();
+        updateUndoState();
+        redrawEditorCanvas();
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      if (editingStrokes.length === 0) return;
+      clearConfirmBar.classList.remove('hidden');
+    });
+
+    clearCancelBtn.addEventListener('click', () => {
+      clearConfirmBar.classList.add('hidden');
+    });
+
+    clearConfirmBtn.addEventListener('click', () => {
+      editingStrokes = [];
+      clearConfirmBar.classList.add('hidden');
+      updateUndoState();
+      redrawEditorCanvas();
+    });
+
+    cancelEditBtn.addEventListener('click', closeEditor);
+
+    saveEditBtn.addEventListener('click', () => {
+      const targetDateStr = editingDateStr;
+      if (!targetDateStr) return;
+
+      const strokesToSave = JSON.parse(JSON.stringify(editingStrokes));
+
+      if (strokesToSave.length > 0) {
+        calendarData[targetDateStr] = strokesToSave;
+      } else {
+        delete calendarData[targetDateStr];
+      }
+      
+      renderCalendar();
+      closeEditor();
+      showToast('保存しています...');
+
+      saveDayToFirestore(targetDateStr, strokesToSave)
+        .then(() => {
+          showToast('保存完了しました！');
+          editingDateStr = null;
+        })
+        .catch((err) => {
+          console.error('Firestore save error:', err);
+          showToast('保存に失敗しました');
+          editingDateStr = null;
+        });
+    });
+
+    document.getElementById('prevMonthBtn').addEventListener('click', () => changeMonth(-1));
+    document.getElementById('nextMonthBtn').addEventListener('click', () => changeMonth(1));
+    document.getElementById('todayBtn').addEventListener('click', () => {
+      currentYear = today.getFullYear();
+      currentMonth = today.getMonth();
+      renderCalendar();
+      fetchMonthData(currentYear, currentMonth, false);
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      fetchMonthData(currentYear, currentMonth, true);
+    });
+
+    document.getElementById('shareBtn').addEventListener('click', async () => {
+      const url = window.location.href;
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('共有用URLをコピーしました！');
+      } catch {
+        prompt('このURLをコピーして共有してください:', url);
+      }
+    });
+
+    window.addEventListener('hashchange', () => {
+      calendarId = ensureCalendarId();
+      calendarData = {};
+      renderCalendar();
+      fetchMonthData(currentYear, currentMonth, true);
+    });
+
+    window.addEventListener('resize', () => {
+      if (!editorModal.classList.contains('hidden')) {
+        resizeEditorCanvas();
+      }
+    });
+
+    renderCalendar();
+    fetchMonthData(currentYear, currentMonth, false);
+  </script>
+</body>
+</html>
