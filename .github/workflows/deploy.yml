@@ -4,6 +4,12 @@ on:
   push:
     branches: [ main ]
 
+# GitHub Pagesへのデプロイに必要な権限
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -25,14 +31,16 @@ jobs:
           };
           EOF
 
-      # 2. .gitignoreに阻まれないよう、強制的にgitに追加する（ここがポイント！）
-      - name: Force add config.js
-        run: git add -f config.js
+      # 2. GitHub Pages向けの成果物としてアップロード準備
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
 
-      # 3. GitHub Pagesへデプロイ
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
-          exclude_sources: ".github, .git"
+          path: '.'
+
+      # 3. GitHub公式のデプロイアクションで公開
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
