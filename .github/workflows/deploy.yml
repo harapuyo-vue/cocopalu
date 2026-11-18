@@ -1,0 +1,34 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ] # もしmainではなくmasterの場合は 'master' に変更してください
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # GitHub Secretsから安全に config.js を自動生成する
+      - name: Generate config.js
+        run: |
+          cat << EOF > config.js
+          export const firebaseConfig = {
+            apiKey: "${{ secrets.FIREBASE_API_KEY }}",
+            authDomain: "${{ secrets.FIREBASE_AUTH_DOMAIN }}",
+            projectId: "${{ secrets.PROJECTID }}",
+            storageBucket: "${{ secrets.STORAGEBUCKET }}",
+            messagingSenderId: "${{ secrets.MESSAGINGSENDERID }}",
+            appId: "${{ secrets.APPID }}"
+          };
+          EOF
+
+      # GitHub Pagesへデプロイ
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          exclude_sources: ".github, .git, .gitignore"
