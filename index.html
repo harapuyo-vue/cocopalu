@@ -145,23 +145,11 @@
     </div>
   </div>
 
-  <!-- Firebase SDK (Modular v10) -->
+  <!-- Firebase SDK & config.jsからの読み込み -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-    // =========================================================================
-    // ★ あなたの firebaseConfig 設定済み ★
-    // =========================================================================
-    const firebaseConfig = {
-    apiKey: "AIzaSyBLwIxh5cJQOEq6CPE3weAqzFeourAGzq4",
-    authDomain: "cocopalu.firebaseapp.com",
-    projectId: "cocopalu",
-    storageBucket: "cocopalu.firebasestorage.app",
-    messagingSenderId: "820869221606",
-    appId: "1:820869221606:web:ac3088eb30560f79a77f27"
-    };
-    // =========================================================================
+    import { firebaseConfig } from "./config.js"; // ← GitHub Actionsが自動生成する安全な設定ファイル
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
@@ -252,9 +240,8 @@
       }
     }
 
-    // ★ dateStrが空でないか確実にチェックし、安全に保存する処理
     async function saveDayToFirestore(dateStr, strokes) {
-      if (!dateStr) return; // 日付がない場合は何もしない
+      if (!dateStr) return;
       const [yStr, mStr] = dateStr.split('-');
       const y = parseInt(yStr, 10);
       const m = parseInt(mStr, 10) - 1;
@@ -476,7 +463,6 @@
     function closeEditor() {
       editorModal.classList.add('hidden');
       editorModal.classList.remove('flex');
-      // ★ ここで editingDateStr をすぐに null にせず、保存処理が終わるまで保持するように変更（非同期の競合防止）
       isDrawing = false;
     }
 
@@ -559,7 +545,6 @@
 
     cancelEditBtn.addEventListener('click', closeEditor);
 
-    // ★ OKボタン押下時の処理：日付変数を確実にキャプチャしてからモーダルを閉じ、裏で安全に保存する
     saveEditBtn.addEventListener('click', () => {
       const targetDateStr = editingDateStr;
       if (!targetDateStr) return;
@@ -579,7 +564,7 @@
       saveDayToFirestore(targetDateStr, strokesToSave)
         .then(() => {
           showToast('保存完了しました！');
-          editingDateStr = null; // 保存完了後にクリア
+          editingDateStr = null;
         })
         .catch((err) => {
           console.error('Firestore save error:', err);
