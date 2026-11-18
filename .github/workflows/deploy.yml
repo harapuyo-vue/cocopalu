@@ -11,7 +11,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # GitHub Secretsから安全に config.js を自動生成する
+      # 1. GitHub Secretsから安全に config.js を自動生成する
       - name: Generate config.js
         run: |
           cat << EOF > config.js
@@ -25,7 +25,11 @@ jobs:
           };
           EOF
 
-      # GitHub Pagesへデプロイ
+      # 2. .gitignoreに阻まれないよう、強制的にgitに追加する（ここがポイント！）
+      - name: Force add config.js
+        run: git add -f config.js
+
+      # 3. GitHub Pagesへデプロイ
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
