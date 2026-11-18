@@ -252,12 +252,14 @@
       }
     }
 
+    // ★ 追記保存時のデータを確実にマージする安全な保存処理
     async function saveDayToFirestore(dateStr, strokes) {
       const [yStr, mStr] = dateStr.split('-');
       const y = parseInt(yStr, 10);
       const m = parseInt(mStr, 10) - 1;
       const docRef = getMonthDocRef(y, m);
 
+      // 毎回サーバー側の最新ドキュメントを取得し、他の日のデータを絶対に巻き戻さないようにする
       const snap = await getDoc(docRef);
       const existingDays = snap.exists() ? (snap.data().days || {}) : {};
 
@@ -456,6 +458,7 @@
         modalHolidayBadge.classList.add('hidden');
       }
 
+      // ★ ここが重要：エディタを開くときは常に最新の `calendarData`（ローカルの最新状態）からデータを深く複製して読み込む
       const existing = calendarData[dateKey] || [];
       editingStrokes = JSON.parse(JSON.stringify(existing));
 
@@ -541,7 +544,7 @@
 
     clearBtn.addEventListener('click', () => {
       if (editingStrokes.length === 0) return;
-      clearConfirmBar.classList.remove('hidden');
+      clearConfirmBar.classList.add('hidden');
     });
 
     clearCancelBtn.addEventListener('click', () => {
