@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="共有カレンダー" />
+  <meta name="apple-mobile-web-app-title" content="cocopalu" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <title>cocopalu</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -22,9 +22,9 @@
       font-family: Arial, -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
       overscroll-behavior-y: none;
     }
-    /* iPhoneの角丸やホームインジケータに隠れないよう下部に余白を確保 */
+    /* iPhoneのホームバーや角丸を考慮して、アプリ全体の下部にしっかり余白を確保する */
     body {
-      padding-bottom: env(safe-area-inset-bottom, 16px);
+      padding-bottom: max(env(safe-area-inset-bottom), 24px);
     }
     .no-select {
       user-select: none;
@@ -83,13 +83,13 @@
     <div class="text-blue-600">土</div>
   </div>
 
-  <!-- カレンダーグリッド（下部に少し余白を設けて角丸で見切れるのを防止） -->
-  <main id="calendarGrid" class="flex-1 grid grid-cols-7 auto-rows-fr bg-slate-200 gap-[1px] overflow-hidden no-select mb-2">
+  <!-- カレンダーグリッド -->
+  <main id="calendarGrid" class="flex-1 grid grid-cols-7 auto-rows-fr bg-slate-200 gap-[1px] overflow-hidden no-select mb-3 px-1">
     <!-- JSで動的生成 -->
   </main>
 
   <!-- トースト通知 -->
-  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800/90 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50 whitespace-nowrap">
+  <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800/90 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50 whitespace-nowrap">
     更新しました
   </div>
 
@@ -273,10 +273,9 @@
         delete calendarData[dateStr];
       }
 
-      await setDoc(docRef, { days: existingDays });
+      await setDoc(docRef, { days: existingDays }, { merge: true });
     }
 
-    // 手書き線の太さをほんの少し細く調整 (プレビュー用: 0.022 → 0.018)
     function drawStrokesOnContext(targetCtx, strokes, width, height, lineWidthRatio = 0.018) {
       targetCtx.clearRect(0, 0, width, height);
       if (!strokes || strokes.length === 0) return;
@@ -441,7 +440,6 @@
       redrawEditorCanvas();
     }
 
-    // 手書き編集画面側の太さも少し細く調整 (0.015 → 0.012)
     function redrawEditorCanvas() {
       drawStrokesOnContext(ctx, editingStrokes, drawCanvas.width, drawCanvas.height, 0.012);
     }
@@ -566,7 +564,12 @@
     saveEditBtn.addEventListener('click', () => {
       if (!editingDateStr) return;
 
-      calendarData[editingDateStr] = JSON.parse(JSON.stringify(editingStrokes));
+      if (editingStrokes.length > 0) {
+        calendarData[editingDateStr] = JSON.parse(JSON.stringify(editingStrokes));
+      } else {
+        delete calendarData[editingDateStr];
+      }
+      
       renderCalendar();
       closeEditor();
       showToast('保存しています...');
