@@ -18,15 +18,19 @@
       padding: 0;
       height: 100%;
       background-color: #f8fafc;
-      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      font-family: Arial, -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
       overscroll-behavior-y: none;
     }
     .no-select {
       user-select: none;
       -webkit-user-select: none;
     }
+    /* キャンバス上のデフォルトの長押し選択やスクロールを完全にブロックする */
     .canvas-container {
       touch-action: none;
+      -webkit-touch-callout: none; /* iOSの長押しメニューを禁止 */
+      -webkit-user-select: none;
+      user-select: none;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
@@ -151,14 +155,13 @@
     // ★ ここにあなたの firebaseConfig を貼り付けてください ★
     // =========================================================================
     const firebaseConfig = {
-    apiKey: "AIzaSyBLwIxh5cJQOEq6CPE3weAqzFeourAGzq4",
-    authDomain: "cocopalu.firebaseapp.com",
-    projectId: "cocopalu",
-    storageBucket: "cocopalu.firebasestorage.app",
-    messagingSenderId: "820869221606",
-    appId: "1:820869221606:web:ac3088eb30560f79a77f27"
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
     };
-
     // =========================================================================
 
     const app = initializeApp(firebaseConfig);
@@ -184,42 +187,17 @@
 
     // 2. 日本の祝日データ（2025〜2028年）
     const HOLIDAYS = {
-      // 2025
-      '2025-01-01': '元日', '2025-01-13': '成人の日', '2025-02-11': '建国記念の日',
-      '2025-02-23': '天皇誕生日', '2025-02-24': '振替休日', '2025-03-20': '春分の日',
-      '2025-04-29': '昭和の日', '2025-05-03': '憲法記念日', '2025-05-04': 'みどりの日',
-      '2025-05-05': 'こどもの日', '2025-05-06': '振替休日', '2025-07-21': '海の日',
-      '2025-08-11': '山の日', '2025-09-15': '敬老の日', '2025-09-23': '秋分の日',
-      '2025-10-13': 'スポーツの日', '2025-11-03': '文化の日', '2025-11-23': '勤労感謝の日',
-      '2025-11-24': '振替休日',
-      // 2026
-      '2026-01-01': '元日', '2026-01-12': '成人の日', '2026-02-11': '建国記念の日',
-      '2026-02-23': '天皇誕生日', '2026-03-20': '春分の日', '2026-04-29': '昭和の日',
-      '2026-05-03': '憲法記念日', '2026-05-04': 'みどりの日', '2026-05-05': 'こどもの日',
-      '2026-05-06': '振替休日', '2026-07-20': '海の日', '2026-08-11': '山の日',
-      '2026-09-21': '敬老の日', '2026-09-22': '国民の休日', '2026-09-23': '秋分の日',
-      '2026-10-12': 'スポーツの日', '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日',
-      // 2027
-      '2027-01-01': '元日', '2027-01-11': '成人の日', '2027-02-11': '建国記念の日',
-      '2027-02-23': '天皇誕生日', '2027-03-21': '春分の日', '2027-03-22': '振替休日',
-      '2027-04-29': '昭和の日', '2027-05-03': '憲法記念日', '2027-05-04': 'みどりの日',
-      '2027-05-05': 'こどもの日', '2027-07-19': '海の日', '2027-08-11': '山の日',
-      '2027-09-20': '敬老の日', '2027-09-23': '秋分の日', '2027-10-11': 'スポーツの日',
-      '2027-11-03': '文化の日', '2027-11-23': '勤労感謝の日',
-      // 2028
-      '2028-01-01': '元日', '2028-01-10': '成人の日', '2028-02-11': '建国記念の日',
-      '2028-02-23': '天皇誕生日', '2028-03-20': '春分の日', '2028-04-29': '昭和の日',
-      '2028-05-03': '憲法記念日', '2028-05-04': 'みどりの日', '2028-05-05': 'こどもの日',
-      '2028-07-17': '海の日', '2028-08-11': '山の日', '2028-09-18': '敬老の日',
-      '2028-09-22': '秋分の日', '2028-10-09': 'スポーツの日', '2028-11-03': '文化の日',
-      '2028-11-23': '勤労感謝の日'
+      '2025-01-01': '元日', '2025-01-13': '成人の日', '2025-02-11': '建国記念の日', '2025-02-23': '天皇誕生日', '2025-02-24': '振替休日', '2025-03-20': '春分の日', '2025-04-29': '昭和の日', '2025-05-03': '憲法記念日', '2025-05-04': 'みどりの日', '2025-05-05': 'こどもの日', '2025-05-06': '振替休日', '2025-07-21': '海の日', '2025-08-11': '山の日', '2025-09-15': '敬老の日', '2025-09-23': '秋分の日', '2025-10-13': 'スポーツの日', '2025-11-03': '文化の日', '2025-11-23': '勤労感謝の日', '2025-11-24': '振替休日',
+      '2026-01-01': '元日', '2026-01-12': '成人の日', '2026-02-11': '建国記念の日', '2026-02-23': '天皇誕生日', '2026-03-20': '春分の日', '2026-04-29': '昭和の日', '2026-05-03': '憲法記念日', '2026-05-04': 'みどりの日', '2026-05-05': 'こどもの日', '2026-05-06': '振替休日', '2026-07-20': '海の日', '2026-08-11': '山の日', '2026-09-21': '敬老の日', '2026-09-22': '国民の休日', '2026-09-23': '秋分の日', '2026-10-12': 'スポーツの日', '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日',
+      '2027-01-01': '元日', '2027-01-11': '成人の日', '2027-02-11': '建国記念の日', '2027-02-23': '天皇誕生日', '2027-03-21': '春分の日', '2027-03-22': '振替休日', '2027-04-29': '昭和の日', '2027-05-03': '憲法記念日', '2027-05-04': 'みどりの日', '2027-05-05': 'こどもの日', '2027-07-19': '海の日', '2027-08-11': '山の日', '2027-09-20': '敬老の日', '2027-09-23': '秋分の日', '2027-10-11': 'スポーツの日', '2027-11-03': '文化の日', '2027-11-23': '勤労感謝の日',
+      '2028-01-01': '元日', '2028-01-10': '成人の日', '2028-02-11': '建国記念の日', '2028-02-23': '天皇誕生日', '2028-03-20': '春分の日', '2028-04-29': '昭和の日', '2028-05-03': '憲法記念日', '2028-05-04': 'みどりの日', '2028-05-05': 'こどもの日', '2028-07-17': '海の日', '2028-08-11': '山の日', '2028-09-18': '敬老の日', '2028-09-22': '秋分の日', '2028-10-09': 'スポーツの日', '2028-11-03': '文化の日', '2028-11-23': '勤労感謝の日'
     };
 
     // 3. 状態管理
     const today = new Date();
     let currentYear = today.getFullYear();
-    let currentMonth = today.getMonth(); // 0-11
-    let calendarData = {}; // { "YYYY-MM-DD": [ { color, points: [{x, y}, ...] }, ... ] }
+    let currentMonth = today.getMonth();
+    let calendarData = {};
 
     let selectedColor = localStorage.getItem(COLOR_STORAGE_KEY) || '#1e293b';
     let editingDateStr = null;
@@ -251,9 +229,7 @@
       return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
 
-    // =========================================================================
-    // Firestore データ同期（月単位で1ドキュメントに格納し高速・低コスト化）
-    // =========================================================================
+    // 5. Firestore 同期
     function getMonthDocRef(y, m) {
       const ym = `${y}-${String(m + 1).padStart(2, '0')}`;
       return doc(db, 'calendars', calendarId, 'months', ym);
@@ -267,19 +243,14 @@
         const snap = await getDoc(getMonthDocRef(y, m));
         if (snap.exists()) {
           const data = snap.data().days || {};
-          // 該当月のデータを更新
           Object.keys(data).forEach(dateKey => {
             calendarData[dateKey] = data[dateKey];
           });
-          // サーバー側で消去された日をローカルからも反映
           const prefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
           Object.keys(calendarData).forEach(k => {
-            if (k.startsWith(prefix) && !data[k]) {
-              delete calendarData[k];
-            }
+            if (k.startsWith(prefix) && !data[k]) delete calendarData[k];
           });
         } else {
-          // ドキュメント未作成なら該当月のキャッシュをクリア
           const prefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
           Object.keys(calendarData).forEach(k => {
             if (k.startsWith(prefix)) delete calendarData[k];
@@ -289,7 +260,7 @@
         if (showFeedback) showToast('最新の状態に更新しました');
       } catch (err) {
         console.error('Firestore read error:', err);
-        showToast('読み込みに失敗しました（通信状況を確認してください）');
+        showToast('読み込みに失敗しました');
       } finally {
         if (showFeedback) setTimeout(() => icon.classList.remove('animate-spin-fast'), 400);
       }
@@ -301,7 +272,6 @@
       const m = parseInt(mStr, 10) - 1;
       const docRef = getMonthDocRef(y, m);
 
-      // 最新データを一度取得してマージ保存（他の人の別日書き込みを上書きしないため）
       const snap = await getDoc(docRef);
       const existingDays = snap.exists() ? (snap.data().days || {}) : {};
 
@@ -316,7 +286,7 @@
       await setDoc(docRef, { days: existingDays });
     }
 
-    // 5. ストローク描画ヘルパー
+    // 6. ストローク描画ヘルパー
     function drawStrokesOnContext(targetCtx, strokes, width, height, lineWidthRatio = 0.015) {
       targetCtx.clearRect(0, 0, width, height);
       if (!strokes || strokes.length === 0) return;
@@ -346,7 +316,7 @@
       }
     }
 
-    // 6. カレンダーレンダリング
+    // 7. カレンダーレンダリング
     function renderCalendar() {
       monthTitle.textContent = `${currentYear}年 ${currentMonth + 1}月`;
       calendarGrid.innerHTML = '';
@@ -376,7 +346,7 @@
         cell.dataset.date = dateKey;
 
         const topRow = document.createElement('div');
-        topRow.className = 'flex items-center justify-between z-10 pointer-events-none';
+        topRow.className = 'flex items-center justify-between z-10 pointer-events-none px-0.5';
 
         const numSpan = document.createElement('span');
         numSpan.textContent = dayNum;
@@ -385,16 +355,16 @@
         else if (dayOfWeek === 6) colorClass = 'text-blue-600';
 
         if (isToday) {
-          numSpan.className = `text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center bg-blue-600 text-white`;
+          numSpan.className = `text-xs font-normal w-5 h-5 rounded-full flex items-center justify-center bg-blue-600 text-white`;
         } else {
-          numSpan.className = `text-xs font-bold leading-none ${colorClass}`;
+          numSpan.className = `text-sm font-normal leading-none ${colorClass}`;
         }
         topRow.appendChild(numSpan);
 
         if (holidayName) {
           const holSpan = document.createElement('span');
           holSpan.textContent = holidayName;
-          holSpan.className = 'text-[8px] text-red-500 font-medium truncate max-w-[38px] leading-none';
+          holSpan.className = 'text-[7px] text-red-400 font-normal truncate max-w-[36px] leading-none';
           topRow.appendChild(holSpan);
         }
 
@@ -424,7 +394,7 @@
       }
     }
 
-    // 7. スワイプによる月移動
+    // 8. スワイプによる月移動
     let touchStartX = 0;
     let touchStartY = 0;
     let swipedRecently = false;
@@ -462,7 +432,7 @@
       }
     }, { passive: true });
 
-    // 8. 手書き編集モーダル処理
+    // 9. モーダル処理
     function updateColorButtons() {
       document.querySelectorAll('.color-btn').forEach(btn => {
         if (btn.dataset.color === selectedColor) {
@@ -527,7 +497,7 @@
       isDrawing = false;
     }
 
-    // 9. キャンバス描画イベント（Pointer Events）
+    // 10. キャンバス描画イベント
     function getNormalizedPos(e) {
       const rect = drawCanvas.getBoundingClientRect();
       return {
@@ -543,10 +513,7 @@
       clearConfirmBar.classList.add('hidden');
 
       const pos = getNormalizedPos(e);
-      currentStroke = {
-        color: selectedColor,
-        points: [pos]
-      };
+      currentStroke = { color: selectedColor, points: [pos] };
       editingStrokes.push(currentStroke);
       updateUndoState();
       redrawEditorCanvas();
@@ -576,7 +543,7 @@
     drawCanvas.addEventListener('pointerup', endStroke);
     drawCanvas.addEventListener('pointercancel', endStroke);
 
-    // 10. ボタン類のイベントリスナー
+    // 11. イベントリスナー
     document.querySelectorAll('.color-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         selectedColor = btn.dataset.color;
@@ -623,7 +590,7 @@
         showToast('保存しました');
       } catch (err) {
         console.error('Firestore save error:', err);
-        showToast('保存に失敗しました。もう一度お試しください');
+        showToast('保存に失敗しました');
       } finally {
         saveEditBtn.disabled = false;
         saveEditBtn.textContent = 'OK';
@@ -666,7 +633,6 @@
       }
     });
 
-    // 初期表示＆データ取得
     renderCalendar();
     fetchMonthData(currentYear, currentMonth, false);
   </script>
