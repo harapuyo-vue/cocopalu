@@ -148,7 +148,7 @@
   <!-- Firebase SDK (Modular v10) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, updateField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // =========================================================================
     // ★ あなたの firebaseConfig 設定済み ★
@@ -237,7 +237,7 @@
         const snap = await getDoc(getMonthDocRef(y, m));
         if (snap.exists()) {
           const data = snap.data().days || {};
-          calendarData = {}; // 一度リセットして最新を反映
+          calendarData = {};
           Object.keys(data).forEach(dateKey => {
             calendarData[dateKey] = data[dateKey];
           });
@@ -252,14 +252,12 @@
       }
     }
 
-    // ★ データの競合を防ぐため、最新のサーバーデータを取得してから該当日のストロークを更新して保存する安全な方式
     async function saveDayToFirestore(dateStr, strokes) {
       const [yStr, mStr] = dateStr.split('-');
       const y = parseInt(yStr, 10);
       const m = parseInt(mStr, 10) - 1;
       const docRef = getMonthDocRef(y, m);
 
-      // 常にサーバーの最新状態を取得してマージする
       const snap = await getDoc(docRef);
       const existingDays = snap.exists() ? (snap.data().days || {}) : {};
 
