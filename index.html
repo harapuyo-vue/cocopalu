@@ -22,7 +22,6 @@
       font-family: Arial, -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
       overscroll-behavior-y: none;
     }
-    /* iPhoneのホームバーや角丸を考慮して、アプリ全体の下部にしっかり余白を確保する */
     body {
       padding-bottom: max(env(safe-area-inset-bottom), 24px);
     }
@@ -93,7 +92,7 @@
     更新しました
   </div>
 
-  <!-- 手書き編集モーダル -->
+  <!-- 手書き編集モーダル（縦長キャンバスに変更） -->
   <div id="editorModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-[1px] z-40 hidden flex-col justify-between p-3 sm:p-6">
     <div class="bg-white rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-md shrink-0 no-select">
       <div class="flex items-center gap-2">
@@ -120,8 +119,9 @@
       </div>
     </div>
 
+    <!-- 縦長のキャンバスエリア（縦横比をカレンダーのマスに合わせて縦長に調整） -->
     <div class="flex-1 flex items-center justify-center my-2 min-h-0">
-      <div id="canvasWrapper" class="relative bg-white rounded-2xl shadow-xl border-2 border-slate-300 overflow-hidden canvas-container aspect-square w-full max-w-[440px] max-h-full">
+      <div id="canvasWrapper" class="relative bg-white rounded-2xl shadow-xl border-2 border-slate-300 overflow-hidden canvas-container w-full max-w-[380px] max-h-full aspect-[3/4]">
         <div class="absolute inset-0 pointer-events-none opacity-25" style="background-image: linear-gradient(to right, #cbd5e1 1px, transparent 1px), linear-gradient(to bottom, #cbd5e1 1px, transparent 1px); background-size: 25% 25%;"></div>
         <canvas id="drawCanvas" class="w-full h-full block"></canvas>
       </div>
@@ -199,6 +199,7 @@
     let selectedColor = localStorage.getItem(COLOR_STORAGE_KEY) || '#1e293b';
     let editingDateStr = null;
     let editingStrokes = [];
+    let initialStrokesJson = '';
     let currentStroke = null;
     let isDrawing = false;
 
@@ -360,13 +361,13 @@
         const previewWrap = document.createElement('div');
         previewWrap.className = 'flex-1 w-full flex items-center justify-center min-h-0 pt-0.5 pointer-events-none';
         const miniCanvas = document.createElement('canvas');
-        miniCanvas.className = 'max-w-full max-h-full aspect-square';
-        miniCanvas.width = 160;
-        miniCanvas.height = 160;
+        miniCanvas.className = 'w-full h-full object-contain'; // 縦長比率にぴったり合わせる
+        miniCanvas.width = 150;
+        miniCanvas.height = 200;
 
         const strokes = calendarData[dateKey];
         if (strokes && strokes.length > 0) {
-          drawStrokesOnContext(miniCanvas.getContext('2d'), strokes, 160, 160, 0.018);
+          drawStrokesOnContext(miniCanvas.getContext('2d'), strokes, 150, 200, 0.018);
         }
 
         previewWrap.appendChild(miniCanvas);
@@ -462,6 +463,7 @@
 
       const existing = calendarData[dateKey] || [];
       editingStrokes = JSON.parse(JSON.stringify(existing));
+      initialStrokesJson = JSON.stringify(editingStrokes);
 
       clearConfirmBar.classList.add('hidden');
       updateColorButtons();
@@ -564,8 +566,15 @@
     saveEditBtn.addEventListener('click', () => {
       if (!editingDateStr) return;
 
+      const currentStrokesJson = JSON.stringify(editingStrokes);
+      
+      if (currentStrokesJson === initialStrokesJson) {
+        closeEditor();
+        return;
+      }
+
       if (editingStrokes.length > 0) {
-        calendarData[editingDateStr] = JSON.parse(JSON.stringify(editingStrokes));
+        calendarData[editingDateStr] = JSON.parse(currentStrokesJson);
       } else {
         delete calendarData[editingDateStr];
       }
