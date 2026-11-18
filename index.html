@@ -559,23 +559,24 @@
 
     cancelEditBtn.addEventListener('click', closeEditor);
 
-    saveEditBtn.addEventListener('click', async () => {
+saveEditBtn.addEventListener('click', () => {
       if (!editingDateStr) return;
-      saveEditBtn.disabled = true;
-      saveEditBtn.textContent = '保存中...';
 
-      try {
-        await saveDayToFirestore(editingDateStr, editingStrokes);
-        renderCalendar();
-        closeEditor();
-        showToast('保存しました');
-      } catch (err) {
-        console.error('Firestore save error:', err);
-        showToast('保存に失敗しました');
-      } finally {
-        saveEditBtn.disabled = false;
-        saveEditBtn.textContent = 'OK';
-      }
+      // 1. プレビュー画面のデータを即座に更新して、待ち時間ゼロでモーダルを閉じる
+      calendarData[editingDateStr] = JSON.parse(JSON.stringify(editingStrokes));
+      renderCalendar();
+      closeEditor();
+      showToast('保存しています...');
+
+      // 2. 裏側（バックグラウンド）でFirebaseへの通信を走らせる
+      saveDayToFirestore(editingDateStr, editingStrokes)
+        .then(() => {
+          showToast('保存完了しました！');
+        })
+        .catch((err) => {
+          console.error('Firestore save error:', err);
+          showToast('保存に失敗しました');
+        });
     });
 
     document.getElementById('prevMonthBtn').addEventListener('click', () => changeMonth(-1));
