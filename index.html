@@ -64,7 +64,7 @@
       <button id="shareBtn" class="p-2 rounded-lg bg-slate-100 text-slate-700 active:bg-slate-200 shrink-0" title="URLをコピー">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
       </button>
-      <button id="refreshBtn" style="white-space: nowrap;" class="relative inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold active:bg-blue-700 shadow-sm transition-colors whitespace-nowrap shrink-0">
+      <button id="refreshBtn" style="white-space: nowrap;" class="relative inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold active:bg-blue-700 disabled:opacity-70 shadow-sm transition-colors whitespace-nowrap shrink-0">
         <svg id="refreshIcon" class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         <span id="refreshLabel" style="white-space: nowrap;" class="whitespace-nowrap">更新</span>
         <span id="updateBadge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white"></span>
@@ -150,9 +150,12 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
-      getFirestore,
+      initializeFirestore,
+      persistentLocalCache,
+      persistentMultipleTabManager,
       doc,
       getDoc,
+      getDocFromServer,
       setDoc,
       updateDoc,
       deleteField,
@@ -161,7 +164,11 @@
     import { firebaseConfig } from "./config.js";
 
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    const db = initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    });
 
     function ensureCalendarId() {
       let hash = window.location.hash.replace('#', '').trim();
@@ -194,6 +201,7 @@
 
     let knownMonthRev = 0;
     let hasRemoteUpdate = false;
+    let isFetchingMonth = false;
 
     let selectedColor = localStorage.getItem(COLOR_STORAGE_KEY) || '#1e293b';
     let editingDateStr = null;
@@ -215,7 +223,10 @@
     const saveEditBtn = document.getElementById('saveEditBtn');
     const refreshBtn = document.getElementById('refreshBtn');
     const refreshLabel = document.getElementById('refreshLabel');
+    const refreshIcon = document.getElementById('refreshIcon');
     const updateBadge = document.getElementById('updateBadge');
+
+    let toastTimer = null;
 
     function setRemoteUpdateIndicator(active) {
       hasRemoteUpdate = active;
@@ -231,10 +242,37 @@
       }
     }
 
-    function showToast(msg) {
+    function showToast(msg, duration = 2200) {
+      if (toastTimer) {
+        clearTimeout(toastTimer);
+        toastTimer = null;
+      }
       toast.textContent = msg;
       toast.classList.remove('opacity-0');
-      setTimeout(() => toast.classList.add('opacity-0'), 2200);
+      if (duration > 0) {
+        toastTimer = setTimeout(() => {
+          toast.classList.add('opacity-0');
+          toastTimer = null;
+        }, duration);
+      }
+    }
+
+    function hideToast() {
+      if (toastTimer) {
+        clearTimeout(toastTimer);
+        toastTimer = null;
+      }
+      toast.classList.add('opacity-0');
+    }
+
+    function setLoadingState(loading) {
+      isFetchingMonth = loading;
+      refreshBtn.disabled = loading;
+      if (loading) {
+        refreshIcon.classList.add('animate-spin-fast');
+      } else {
+        refreshIcon.classList.remove('animate-spin-fast');
+      }
     }
 
     function formatDateKey(y, m, d) {
@@ -249,32 +287,74 @@
       return doc(db, 'calendars', calendarId, 'months', getMonthKey(y, m));
     }
 
-    async function fetchMonthData(y, m, showFeedback = false) {
-      const icon = document.getElementById('refreshIcon');
-      if (showFeedback) icon.classList.add('animate-spin-fast');
+    function applyMonthSnapshot(snap) {
+      if (snap && snap.exists()) {
+        const docData = snap.data();
+        const days = docData.days || {};
+        calendarData = {};
+        Object.keys(days).forEach(dateKey => {
+          calendarData[dateKey] = days[dateKey];
+        });
+        knownMonthRev = typeof docData.rev === 'number' ? docData.rev : 0;
+      } else {
+        calendarData = {};
+        knownMonthRev = 0;
+      }
+      setRemoteUpdateIndicator(false);
+      renderCalendar();
+    }
+
+    async function fetchMonthData(y, m, showFeedback = false, loadingMessage = '', forceServer = false) {
+      if (isFetchingMonth) return;
+      setLoadingState(true);
+      if (loadingMessage) {
+        showToast(loadingMessage, 0);
+      }
+
+      const docRef = getMonthDocRef(y, m);
 
       try {
-        const snap = await getDoc(getMonthDocRef(y, m));
-        if (snap.exists()) {
-          const docData = snap.data();
-          const days = docData.days || {};
-          calendarData = {};
-          Object.keys(days).forEach(dateKey => {
-            calendarData[dateKey] = days[dateKey];
-          });
-          knownMonthRev = typeof docData.rev === 'number' ? docData.rev : 0;
+        let snap;
+        if (forceServer) {
+          snap = await getDocFromServer(docRef);
         } else {
-          calendarData = {};
-          knownMonthRev = 0;
+          // キャッシュがあればまず素早く取得し、オンラインならサーバー側も確認する
+          snap = await getDoc(docRef);
+          applyMonthSnapshot(snap);
+          getDocFromServer(docRef)
+            .then((serverSnap) => {
+              if (y === currentYear && m === currentMonth) {
+                applyMonthSnapshot(serverSnap);
+              }
+            })
+            .catch(() => {});
+          if (showFeedback) {
+            showToast('最新の状態に更新しました');
+          } else if (loadingMessage) {
+            hideToast();
+          }
+          return;
         }
-        setRemoteUpdateIndicator(false);
-        renderCalendar();
-        if (showFeedback) showToast('最新の状態に更新しました');
+
+        applyMonthSnapshot(snap);
+        if (showFeedback) {
+          showToast('最新の状態に更新しました');
+        } else if (loadingMessage) {
+          hideToast();
+        }
       } catch (err) {
         console.error('Firestore read error:', err);
-        if (showFeedback) showToast('読み込みに失敗しました');
+        if (forceServer) {
+          try {
+            const cachedSnap = await getDoc(docRef);
+            applyMonthSnapshot(cachedSnap);
+            showToast('オフラインキャッシュを表示中です');
+            return;
+          } catch (_) {}
+        }
+        showToast('読み込みに失敗しました');
       } finally {
-        if (showFeedback) setTimeout(() => icon.classList.remove('animate-spin-fast'), 400);
+        setLoadingState(false);
       }
     }
 
@@ -441,10 +521,11 @@
         currentMonth = 0;
         currentYear++;
       }
+      calendarData = {};
       knownMonthRev = 0;
       setRemoteUpdateIndicator(false);
       renderCalendar();
-      fetchMonthData(currentYear, currentMonth, false);
+      fetchMonthData(currentYear, currentMonth, false, `${currentMonth + 1}月を読み込み中...`, false);
     }
 
     calendarGrid.addEventListener('touchstart', (e) => {
@@ -623,7 +704,7 @@
 
       renderCalendar();
       closeEditor();
-      showToast('保存しています...');
+      showToast('保存しています...', 0);
 
       saveDayToFirestore(targetDateStr, strokesToSave)
         .then(({ hasOtherUpdates }) => {
@@ -647,14 +728,15 @@
     document.getElementById('todayBtn').addEventListener('click', () => {
       currentYear = today.getFullYear();
       currentMonth = today.getMonth();
+      calendarData = {};
       knownMonthRev = 0;
       setRemoteUpdateIndicator(false);
       renderCalendar();
-      fetchMonthData(currentYear, currentMonth, false);
+      fetchMonthData(currentYear, currentMonth, false, `${currentMonth + 1}月を読み込み中...`, false);
     });
 
     refreshBtn.addEventListener('click', () => {
-      fetchMonthData(currentYear, currentMonth, true);
+      fetchMonthData(currentYear, currentMonth, true, '読み込み中...', true);
     });
 
     document.getElementById('shareBtn').addEventListener('click', async () => {
@@ -673,7 +755,7 @@
       knownMonthRev = 0;
       setRemoteUpdateIndicator(false);
       renderCalendar();
-      fetchMonthData(currentYear, currentMonth, true);
+      fetchMonthData(currentYear, currentMonth, true, '読み込み中...', true);
     });
 
     window.addEventListener('resize', () => {
@@ -683,7 +765,7 @@
     });
 
     renderCalendar();
-    fetchMonthData(currentYear, currentMonth, false);
+    fetchMonthData(currentYear, currentMonth, false, '読み込み中...', false);
   </script>
 </body>
 </html>
