@@ -64,9 +64,10 @@
       <button id="shareBtn" class="p-2 rounded-lg bg-slate-100 text-slate-700 active:bg-slate-200" title="URLをコピー">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
       </button>
-      <button id="refreshBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold active:bg-blue-700 shadow-sm">
+      <button id="refreshBtn" class="relative flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold active:bg-blue-700 shadow-sm transition-colors">
         <svg id="refreshIcon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-        <span>更新</span>
+        <span id="refreshLabel">更新</span>
+        <span id="updateBadge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white"></span>
       </button>
     </div>
   </header>
@@ -148,8 +149,16 @@
   <!-- Firebase SDK & config.jsからの読み込み -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { firebaseConfig } from "./config.js"; // ← GitHub Actionsが自動生成する安全な設定ファイル
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      setDoc,
+      updateDoc,
+      deleteField,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { firebaseConfig } from "./config.js";
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
@@ -183,6 +192,10 @@
     let currentMonth = today.getMonth();
     let calendarData = {};
 
+    // 表示中の月（YYYY-MM）に対して、自画面が把握している最新リビジョン番号
+    let knownMonthRev = 0;
+    let hasRemoteUpdate = false;
+
     let selectedColor = localStorage.getItem(COLOR_STORAGE_KEY) || '#1e293b';
     let editingDateStr = null;
     let editingStrokes = [];
@@ -201,6 +214,24 @@
     const clearConfirmBar = document.getElementById('clearConfirmBar');
     const toast = document.getElementById('toast');
     const saveEditBtn = document.getElementById('saveEditBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const refreshLabel = document.getElementById('refreshLabel');
+    const updateBadge = document.getElementById('updateBadge');
+
+    function setRemoteUpdateIndicator(active) {
+      hasRemoteUpdate = active;
+      if (active) {
+        refreshBtn.classList.remove('bg-blue-600', 'active:bg-blue-700');
+        refreshBtn.classList.add('bg-amber-500', 'active:bg-amber-600');
+        refreshLabel.textContent = '更新あり';
+        updateBadge.classList.remove('hidden');
+      } else {
+        refreshBtn.classList.remove('bg-amber-500', 'active:bg-amber-600');
+        refreshBtn.classList.add('bg-blue-600', 'active:bg-blue-700');
+        refreshLabel.textContent = '更新';
+        updateBadge.classList.add('hidden');
+      }
+    }
 
     function showToast(msg) {
       toast.textContent = msg;
@@ -212,9 +243,12 @@
       return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
 
+    function getMonthKey(y, m) {
+      return `${y}-${String(m + 1).padStart(2, '0')}`;
+    }
+
     function getMonthDocRef(y, m) {
-      const ym = `${y}-${String(m + 1).padStart(2, '0')}`;
-      return doc(db, 'calendars', calendarId, 'months', ym);
+      return doc(db, 'calendars', calendarId, 'months', getMonthKey(y, m));
     }
 
     async function fetchMonthData(y, m, showFeedback = false) {
@@ -224,12 +258,18 @@
       try {
         const snap = await getDoc(getMonthDocRef(y, m));
         if (snap.exists()) {
-          const data = snap.data().days || {};
+          const docData = snap.data();
+          const days = docData.days || {};
           calendarData = {};
-          Object.keys(data).forEach(dateKey => {
-            calendarData[dateKey] = data[dateKey];
+          Object.keys(days).forEach(dateKey => {
+            calendarData[dateKey] = days[dateKey];
           });
+          knownMonthRev = typeof docData.rev === 'number' ? docData.rev : 0;
+        } else {
+          calendarData = {};
+          knownMonthRev = 0;
         }
+        setRemoteUpdateIndicator(false);
         renderCalendar();
         if (showFeedback) showToast('最新の状態に更新しました');
       } catch (err) {
@@ -240,25 +280,53 @@
       }
     }
 
+    // 1日単位で部分更新しつつ、サーバー側の最新revを確認して他端末の更新を検知する
     async function saveDayToFirestore(dateStr, strokes) {
-      if (!dateStr) return;
+      if (!dateStr) return { hasOtherUpdates: false };
       const [yStr, mStr] = dateStr.split('-');
       const y = parseInt(yStr, 10);
       const m = parseInt(mStr, 10) - 1;
       const docRef = getMonthDocRef(y, m);
+      const isCurrentMonth = (y === currentYear && m === currentMonth);
 
       const snap = await getDoc(docRef);
-      const existingDays = snap.exists() ? (snap.data().days || {}) : {};
+      const fieldPath = `days.${dateStr}`;
+      const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
 
-      if (strokes && strokes.length > 0) {
-        existingDays[dateStr] = strokes;
-        calendarData[dateStr] = strokes;
-      } else {
-        delete existingDays[dateStr];
-        delete calendarData[dateStr];
+      if (!snap.exists()) {
+        // 初回作成時のみドキュメント全体を作成
+        const nextRev = 1;
+        const initialDays = hasStrokes ? { [dateStr]: strokes } : {};
+        await setDoc(docRef, {
+          days: initialDays,
+          rev: nextRev,
+          updatedAt: serverTimestamp()
+        });
+        if (isCurrentMonth) {
+          knownMonthRev = nextRev;
+          return { hasOtherUpdates: false };
+        }
+        return { hasOtherUpdates: false };
       }
 
-      await setDoc(docRef, { days: existingDays });
+      const currentServerRev = typeof snap.data().rev === 'number' ? snap.data().rev : 0;
+      const nextRev = currentServerRev + 1;
+
+      // 対象の日付フィールドだけを更新・削除（他の日付の配列は丸ごと書き換えない）
+      await updateDoc(docRef, {
+        [fieldPath]: hasStrokes ? strokes : deleteField(),
+        rev: nextRev,
+        updatedAt: serverTimestamp()
+      });
+
+      if (isCurrentMonth) {
+        // 自分が保存する直前に別端末が進めていたリビジョンがあれば、未反映の更新ありとみなす
+        const hadUnseenRemoteChanges = currentServerRev > knownMonthRev;
+        knownMonthRev = nextRev;
+        return { hasOtherUpdates: hadUnseenRemoteChanges };
+      }
+
+      return { hasOtherUpdates: false };
     }
 
     function drawStrokesOnContext(targetCtx, strokes, width, height, lineWidthRatio = 0.018) {
@@ -379,6 +447,8 @@
         currentMonth = 0;
         currentYear++;
       }
+      knownMonthRev = 0;
+      setRemoteUpdateIndicator(false);
       renderCalendar();
       fetchMonthData(currentYear, currentMonth, false);
     }
@@ -556,14 +626,19 @@
       } else {
         delete calendarData[targetDateStr];
       }
-      
+
       renderCalendar();
       closeEditor();
       showToast('保存しています...');
 
       saveDayToFirestore(targetDateStr, strokesToSave)
-        .then(() => {
-          showToast('保存完了しました！');
+        .then(({ hasOtherUpdates }) => {
+          if (hasOtherUpdates) {
+            setRemoteUpdateIndicator(true);
+            showToast('保存完了（ほかの更新があります）');
+          } else {
+            showToast('保存完了しました！');
+          }
           editingDateStr = null;
         })
         .catch((err) => {
@@ -578,11 +653,13 @@
     document.getElementById('todayBtn').addEventListener('click', () => {
       currentYear = today.getFullYear();
       currentMonth = today.getMonth();
+      knownMonthRev = 0;
+      setRemoteUpdateIndicator(false);
       renderCalendar();
       fetchMonthData(currentYear, currentMonth, false);
     });
 
-    document.getElementById('refreshBtn').addEventListener('click', () => {
+    refreshBtn.addEventListener('click', () => {
       fetchMonthData(currentYear, currentMonth, true);
     });
 
@@ -599,6 +676,8 @@
     window.addEventListener('hashchange', () => {
       calendarId = ensureCalendarId();
       calendarData = {};
+      knownMonthRev = 0;
+      setRemoteUpdateIndicator(false);
       renderCalendar();
       fetchMonthData(currentYear, currentMonth, true);
     });
