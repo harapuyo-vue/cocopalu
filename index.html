@@ -163,8 +163,16 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const SAVE_TIMEOUT_MS = 4000;
-    const FETCH_TIMEOUT_MS = 6000;
+    const SAVE_TIMEOUT_MS = 2500;
+    const FETCH_TIMEOUT_MS = 4000;
+
+    let isDeviceOnline = navigator.onLine;
+    window.addEventListener('online', () => { isDeviceOnline = true; });
+    window.addEventListener('offline', () => { isDeviceOnline = false; });
+
+    function isLikelyOffline() {
+      return !isDeviceOnline || !navigator.onLine;
+    }
 
     function withTimeout(promise, ms) {
       return new Promise((resolve, reject) => {
@@ -304,7 +312,7 @@
     async function fetchMonthData(y, m, showFeedback = false, loadingMessage = '') {
       if (isFetchingMonth) return;
 
-      if (!navigator.onLine) {
+      if (isLikelyOffline()) {
         showToast('オフラインのため読み込めません');
         return;
       }
@@ -679,7 +687,7 @@
       const targetDateStr = editingDateStr;
       if (!targetDateStr) return;
 
-      if (!navigator.onLine) {
+      if (isLikelyOffline()) {
         showToast('オフラインのため保存できません');
         return;
       }
