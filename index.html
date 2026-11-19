@@ -64,8 +64,8 @@
       <button id="shareBtn" class="p-2 rounded-lg bg-slate-100 text-slate-700 active:bg-slate-200" title="URLをコピー">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
       </button>
-      <button id="refreshBtn" class="relative flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold active:bg-blue-700 shadow-sm transition-colors">
-        <svg id="refreshIcon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      <button id="refreshBtn" class="relative flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold active:bg-blue-700 shadow-sm transition-colors whitespace-nowrap shrink-0">
+        <svg id="refreshIcon" class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         <span id="refreshLabel">更新</span>
         <span id="updateBadge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white"></span>
       </button>
@@ -220,15 +220,14 @@
 
     function setRemoteUpdateIndicator(active) {
       hasRemoteUpdate = active;
+      refreshLabel.textContent = '更新';
       if (active) {
         refreshBtn.classList.remove('bg-blue-600', 'active:bg-blue-700');
         refreshBtn.classList.add('bg-amber-500', 'active:bg-amber-600');
-        refreshLabel.textContent = '更新あり';
         updateBadge.classList.remove('hidden');
       } else {
         refreshBtn.classList.remove('bg-amber-500', 'active:bg-amber-600');
         refreshBtn.classList.add('bg-blue-600', 'active:bg-blue-700');
-        refreshLabel.textContent = '更新';
         updateBadge.classList.add('hidden');
       }
     }
@@ -294,7 +293,6 @@
       const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
 
       if (!snap.exists()) {
-        // 初回作成時のみドキュメント全体を作成
         const nextRev = 1;
         const initialDays = hasStrokes ? { [dateStr]: strokes } : {};
         await setDoc(docRef, {
@@ -312,7 +310,6 @@
       const currentServerRev = typeof snap.data().rev === 'number' ? snap.data().rev : 0;
       const nextRev = currentServerRev + 1;
 
-      // 対象の日付フィールドだけを更新・削除（他の日付の配列は丸ごと書き換えない）
       await updateDoc(docRef, {
         [fieldPath]: hasStrokes ? strokes : deleteField(),
         rev: nextRev,
@@ -320,7 +317,6 @@
       });
 
       if (isCurrentMonth) {
-        // 自分が保存する直前に別端末が進めていたリビジョンがあれば、未反映の更新ありとみなす
         const hadUnseenRemoteChanges = currentServerRev > knownMonthRev;
         knownMonthRev = nextRev;
         return { hasOtherUpdates: hadUnseenRemoteChanges };
