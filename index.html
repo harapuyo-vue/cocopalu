@@ -150,12 +150,9 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
-      initializeFirestore,
-      persistentLocalCache,
-      persistentMultipleTabManager,
+      getFirestore,
       doc,
       getDoc,
-      getDocFromServer,
       setDoc,
       updateDoc,
       deleteField,
@@ -164,11 +161,28 @@
     import { firebaseConfig } from "./config.js";
 
     const app = initializeApp(firebaseConfig);
-    const db = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-      })
-    });
+    const db = getFirestore(app);
+
+    const SAVE_TIMEOUT_MS = 4000;
+    const FETCH_TIMEOUT_MS = 6000;
+
+    function withTimeout(promise, ms) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error('REQUEST_TIMEOUT'));
+        }, ms);
+        promise.then(
+          (val) => {
+            clearTimeout(timer);
+            resolve(val);
+          },
+          (err) => {
+            clearTimeout(timer);
+            reject(err);
+          }
+        );
+      });
+    }
 
     function ensureCalendarId() {
       let hash = window.location.hash.replace('#', '').trim();
@@ -287,56 +301,35 @@
       return doc(db, 'calendars', calendarId, 'months', getMonthKey(y, m));
     }
 
-    function applyMonthSnapshot(snap) {
-      if (snap && snap.exists()) {
-        const docData = snap.data();
-        const days = docData.days || {};
-        calendarData = {};
-        Object.keys(days).forEach(dateKey => {
-          calendarData[dateKey] = days[dateKey];
-        });
-        knownMonthRev = typeof docData.rev === 'number' ? docData.rev : 0;
-      } else {
-        calendarData = {};
-        knownMonthRev = 0;
-      }
-      setRemoteUpdateIndicator(false);
-      renderCalendar();
-    }
-
-    async function fetchMonthData(y, m, showFeedback = false, loadingMessage = '', forceServer = false) {
+    async function fetchMonthData(y, m, showFeedback = false, loadingMessage = '') {
       if (isFetchingMonth) return;
+
+      if (!navigator.onLine) {
+        showToast('オフラインのため読み込めません');
+        return;
+      }
+
       setLoadingState(true);
       if (loadingMessage) {
         showToast(loadingMessage, 0);
       }
 
-      const docRef = getMonthDocRef(y, m);
-
       try {
-        let snap;
-        if (forceServer) {
-          snap = await getDocFromServer(docRef);
+        const snap = await withTimeout(getDoc(getMonthDocRef(y, m)), FETCH_TIMEOUT_MS);
+        if (snap.exists()) {
+          const docData = snap.data();
+          const days = docData.days || {};
+          calendarData = {};
+          Object.keys(days).forEach(dateKey => {
+            calendarData[dateKey] = days[dateKey];
+          });
+          knownMonthRev = typeof docData.rev === 'number' ? docData.rev : 0;
         } else {
-          // キャッシュがあればまず素早く取得し、オンラインならサーバー側も確認する
-          snap = await getDoc(docRef);
-          applyMonthSnapshot(snap);
-          getDocFromServer(docRef)
-            .then((serverSnap) => {
-              if (y === currentYear && m === currentMonth) {
-                applyMonthSnapshot(serverSnap);
-              }
-            })
-            .catch(() => {});
-          if (showFeedback) {
-            showToast('最新の状態に更新しました');
-          } else if (loadingMessage) {
-            hideToast();
-          }
-          return;
+          calendarData = {};
+          knownMonthRev = 0;
         }
-
-        applyMonthSnapshot(snap);
+        setRemoteUpdateIndicator(false);
+        renderCalendar();
         if (showFeedback) {
           showToast('最新の状態に更新しました');
         } else if (loadingMessage) {
@@ -344,14 +337,6 @@
         }
       } catch (err) {
         console.error('Firestore read error:', err);
-        if (forceServer) {
-          try {
-            const cachedSnap = await getDoc(docRef);
-            applyMonthSnapshot(cachedSnap);
-            showToast('オフラインキャッシュを表示中です');
-            return;
-          } catch (_) {}
-        }
         showToast('読み込みに失敗しました');
       } finally {
         setLoadingState(false);
@@ -525,7 +510,7 @@
       knownMonthRev = 0;
       setRemoteUpdateIndicator(false);
       renderCalendar();
-      fetchMonthData(currentYear, currentMonth, false, `${currentMonth + 1}月を読み込み中...`, false);
+      fetchMonthData(currentYear, currentMonth, false, `${currentMonth + 1}月を読み込み中...`);
     }
 
     calendarGrid.addEventListener('touchstart', (e) => {
@@ -694,6 +679,14 @@
       const targetDateStr = editingDateStr;
       if (!targetDateStr) return;
 
+      if (!navigator.onLine) {
+        showToast('オフラインのため保存できません');
+        return;
+      }
+
+      const previousStrokes = calendarData[targetDateStr]
+        ? JSON.parse(JSON.stringify(calendarData[targetDateStr]))
+        : null;
       const strokesToSave = JSON.parse(JSON.stringify(editingStrokes));
 
       if (strokesToSave.length > 0) {
@@ -706,7 +699,7 @@
       closeEditor();
       showToast('保存しています...', 0);
 
-      saveDayToFirestore(targetDateStr, strokesToSave)
+      withTimeout(saveDayToFirestore(targetDateStr, strokesToSave), SAVE_TIMEOUT_MS)
         .then(({ hasOtherUpdates }) => {
           if (hasOtherUpdates) {
             setRemoteUpdateIndicator(true);
@@ -718,7 +711,13 @@
         })
         .catch((err) => {
           console.error('Firestore save error:', err);
-          showToast('保存に失敗しました');
+          if (previousStrokes && previousStrokes.length > 0) {
+            calendarData[targetDateStr] = previousStrokes;
+          } else {
+            delete calendarData[targetDateStr];
+          }
+          renderCalendar();
+          showToast('オフラインまたは通信エラーのため保存できませんでした');
           editingDateStr = null;
         });
     });
@@ -732,11 +731,11 @@
       knownMonthRev = 0;
       setRemoteUpdateIndicator(false);
       renderCalendar();
-      fetchMonthData(currentYear, currentMonth, false, `${currentMonth + 1}月を読み込み中...`, false);
+      fetchMonthData(currentYear, currentMonth, false, `${currentMonth + 1}月を読み込み中...`);
     });
 
     refreshBtn.addEventListener('click', () => {
-      fetchMonthData(currentYear, currentMonth, true, '読み込み中...', true);
+      fetchMonthData(currentYear, currentMonth, true, '読み込み中...');
     });
 
     document.getElementById('shareBtn').addEventListener('click', async () => {
@@ -755,7 +754,7 @@
       knownMonthRev = 0;
       setRemoteUpdateIndicator(false);
       renderCalendar();
-      fetchMonthData(currentYear, currentMonth, true, '読み込み中...', true);
+      fetchMonthData(currentYear, currentMonth, true, '読み込み中...');
     });
 
     window.addEventListener('resize', () => {
@@ -765,7 +764,7 @@
     });
 
     renderCalendar();
-    fetchMonthData(currentYear, currentMonth, false, '読み込み中...', false);
+    fetchMonthData(currentYear, currentMonth, false, '読み込み中...');
   </script>
 </body>
 </html>
